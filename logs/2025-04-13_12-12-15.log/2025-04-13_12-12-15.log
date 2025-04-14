@@ -1,0 +1,7 @@
+2025-04-13 12:12:15,950 ] 24 root INFO - Exporting data from MongoDB
+2025-04-13 12:12:18,744 ] 27 root INFO - Data exported from MongoDB
+2025-04-13 12:12:18,778 ] 32 root INFO - Raw data saved at: artifacts\raw.csv
+2025-04-13 12:12:18,788 ] 39 root INFO - Train and test split completed.
+2025-04-13 12:12:18,789 ] 40 root INFO - Train path: artifacts\train.csv, Test path: artifacts\test.csv
+2025-04-13 12:12:18,799 ] 57 root INFO - Read the train and test data
+2025-04-13 12:12:18,805 ] 27 root INFO - Data Transformation Started

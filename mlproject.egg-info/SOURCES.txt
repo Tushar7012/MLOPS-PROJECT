@@ -1,3 +1,4 @@
+LICENSE
 README.md
 setup.py
 mlproject.egg-info/PKG-INFO

@@ -1,5 +1,9 @@
 numpy 
 pandas
 scikit-learn
+pymongo
+certifi
+python-dotenv
+dill
 
 -e .

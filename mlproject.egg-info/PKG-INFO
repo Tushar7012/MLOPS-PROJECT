@@ -3,5 +3,6 @@ Name: mlproject
 Version: 0.0.1
 Author: Tushar
 Author-email: td220627@gmail.com
+License-File: LICENSE
 Dynamic: author
 Dynamic: author-email

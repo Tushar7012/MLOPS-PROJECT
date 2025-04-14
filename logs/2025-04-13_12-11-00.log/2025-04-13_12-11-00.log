@@ -1,0 +1,2 @@
+2025-04-13 12:11:00,637 ] 24 root INFO - Exporting data from MongoDB
+2025-04-13 12:11:02,719 ] 48 root ERROR - Error occurred in data ingestion stage
