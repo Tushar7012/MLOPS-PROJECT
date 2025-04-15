@@ -12,7 +12,6 @@ def get_requirements(file_path:str)->List[str]:
     requirements = []
     with open(file_path) as file_obj:
         requirements = file_obj.readlines()
-        # Not going to use the \n in the requirements
         requirements = [req.replace("\n","") for req in requirements]
 
         if HYPEN_E_DOT == "-e .":
