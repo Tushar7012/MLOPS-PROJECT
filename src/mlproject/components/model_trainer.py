@@ -1,120 +1,169 @@
-import sys
-import json
 import os
+import sys
 from dataclasses import dataclass
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import r2_score, accuracy_score
-from sklearn.model_selection import GridSearchCV
+from urllib.parse import urlparse
+import mlflow
+import mlflow.sklearn
+import numpy as np
+from sklearn.metrics import mean_squared_error,mean_absolute_error
+from catboost import CatBoostRegressor
+from sklearn.ensemble import (
+    AdaBoostRegressor,
+    GradientBoostingRegressor,
+    RandomForestRegressor,
+)
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from xgboost import XGBRegressor
 
-from src.mlproject.utils import save_object
 from src.mlproject.exception import CustomException
 from src.mlproject.logger import logging
+from src.mlproject.utils import save_object,evaluate_models
 
 
 @dataclass
 class ModelTrainerConfig:
-    model_path: str = os.path.join("artifacts", "model.pkl")
-    report_path: str = os.path.join("artifacts", "model_report.json")
-
+    trained_model_file_path=os.path.join("artifacts","model.pkl")
 
 class ModelTrainer:
     def __init__(self):
-        self.config = ModelTrainerConfig()
+        self.model_trainer_config=ModelTrainerConfig()
 
-    def initiate_model_training(self, train_array, test_array, task_type="regression"):
+    def eval_metrics(self,actual, pred):
+        rmse = np.sqrt(mean_squared_error(actual, pred))
+        mae = mean_absolute_error(actual, pred)
+        r2 = r2_score(actual, pred)
+        return rmse, mae, r2
+
+    def initiate_model_trainer(self,train_array,test_array):
         try:
-            logging.info(f"Task Type: {task_type}")
-            X_train, y_train = train_array[:, :-1], train_array[:, -1]
-            X_test, y_test = test_array[:, :-1], test_array[:, -1]
-
-            if task_type == "regression":
-                models = {
-                    "LinearRegression": LinearRegression(),
-                    "RandomForestRegressor": RandomForestRegressor()
+            logging.info("Split training and test input data")
+            X_train,y_train,X_test,y_test=(
+                train_array[:,:-1],
+                train_array[:,-1],
+                test_array[:,:-1],
+                test_array[:,-1]
+            )
+            models = {
+                "Random Forest": RandomForestRegressor(),
+                "Decision Tree": DecisionTreeRegressor(),
+                "Gradient Boosting": GradientBoostingRegressor(),
+                "Linear Regression": LinearRegression(),
+                "XGBRegressor": XGBRegressor(),
+                "CatBoosting Regressor": CatBoostRegressor(verbose=False),
+                "AdaBoost Regressor": AdaBoostRegressor(),
+            }
+            params={
+                "Decision Tree": {
+                    'criterion':['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
+                    # 'splitter':['best','random'],
+                    # 'max_features':['sqrt','log2'],
+                },
+                "Random Forest":{
+                    # 'criterion':['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
+                 
+                    # 'max_features':['sqrt','log2',None],
+                    'n_estimators': [8,16,32,64,128,256]
+                },
+                "Gradient Boosting":{
+                    # 'loss':['squared_error', 'huber', 'absolute_error', 'quantile'],
+                    'learning_rate':[.1,.01,.05,.001],
+                    'subsample':[0.6,0.7,0.75,0.8,0.85,0.9],
+                    # 'criterion':['squared_error', 'friedman_mse'],
+                    # 'max_features':['auto','sqrt','log2'],
+                    'n_estimators': [8,16,32,64,128,256]
+                },
+                "Linear Regression":{},
+                "XGBRegressor":{
+                    'learning_rate':[.1,.01,.05,.001],
+                    'n_estimators': [8,16,32,64,128,256]
+                },
+                "CatBoosting Regressor":{
+                    'depth': [6,8,10],
+                    'learning_rate': [0.01, 0.05, 0.1],
+                    'iterations': [30, 50, 100]
+                },
+                "AdaBoost Regressor":{
+                    'learning_rate':[.1,.01,0.5,.001],
+                    # 'loss':['linear','square','exponential'],
+                    'n_estimators': [8,16,32,64,128,256]
                 }
-                param_grid = {
-                    "RandomForestRegressor": {
-                        "n_estimators": [50, 100],
-                        "max_depth": [None, 10]
-                    }
-                }
-                scoring = "r2"
-                evaluate = r2_score
+                
+            }
+            model_report:dict=evaluate_models(X_train,y_train,X_test,y_test,models,params)
 
-            elif task_type == "classification":
-                models = {
-                    "LogisticRegression": LogisticRegression(max_iter=1000),
-                    "RandomForestClassifier": RandomForestClassifier()
-                }
-                param_grid = {
-                    "RandomForestClassifier": {
-                        "n_estimators": [50, 100],
-                        "max_depth": [None, 10]
-                    }
-                }
-                scoring = "accuracy"
-                evaluate = accuracy_score
+            ## To get best model score from dict
+            best_model_score = max(sorted(model_report.values()))
 
-            else:
-                raise ValueError("Invalid task_type. Choose 'regression' or 'classification'.")
+             ## To get best model name from dict
 
-            best_model = None
-            best_score = -1
-            best_model_name = ""
-            report = {}
+            best_model_name = list(model_report.keys())[
+                list(model_report.values()).index(best_model_score)
+            ]
+            best_model = models[best_model_name]
 
-            for name, model in models.items():
-                if name in param_grid:
-                    logging.info(f"Tuning hyperparameters for {name}")
-                    grid = GridSearchCV(model, param_grid[name], scoring=scoring, cv=3)
-                    grid.fit(X_train, y_train)
-                    model = grid.best_estimator_
+            print("This is the best model:")
+            print(best_model_name)
+
+            model_names = list(params.keys())
+
+            actual_model=""
+
+            for model in model_names:
+                if best_model_name == model:
+                    actual_model = actual_model + model
+
+            best_params = params[actual_model]
+
+            mlflow.set_registry_uri("https://dagshub.com/td220627/MLOPS-PROJECT.mlflow")
+            tracking_url_type_store = urlparse(mlflow.get_tracking_uri()).scheme
+
+            # mlflow
+
+            with mlflow.start_run():
+
+                predicted_qualities = best_model.predict(X_test)
+
+                (rmse, mae, r2) = self.eval_metrics(y_test, predicted_qualities)
+
+                mlflow.log_params(best_params)
+
+                mlflow.log_metric("rmse", rmse)
+                mlflow.log_metric("r2", r2)
+                mlflow.log_metric("mae", mae)
+
+
+                # Model registry does not work with file store
+                if tracking_url_type_store != "file":
+
+                    # Register the model
+                    # There are other ways to use the Model Registry, which depends on the use case,
+                    # please refer to the doc for more information:
+                    # https://mlflow.org/docs/latest/model-registry.html#api-workflow
+                    mlflow.sklearn.log_model(best_model, "model", registered_model_name=actual_model)
                 else:
-                    model.fit(X_train, y_train)
+                    mlflow.sklearn.log_model(best_model, "model")
 
-                preds = model.predict(X_test)
-                score = evaluate(y_test, preds)
 
-                report[name] = score
-                logging.info(f"{name} {scoring}: {score}")
 
-                if score > best_score:
-                    best_model = model
-                    best_score = score
-                    best_model_name = name
 
-            save_object(self.config.model_path, best_model)
-            logging.info(f"Saved best model: {best_model_name} to {self.config.model_path}")
+            if best_model_score<0.6:
+                raise CustomException("No best model found")
+            logging.info(f"Best found model on both training and testing dataset")
 
-            with open(self.config.report_path, "w") as f:
-                json.dump(report, f, indent=4)
+            save_object(
+                file_path=self.model_trainer_config.trained_model_file_path,
+                obj=best_model
+            )
 
-            logging.info(f"Best Model: {best_model_name} with {scoring}: {best_score}")
-            return best_model_name, best_score
+            predicted=best_model.predict(X_test)
+
+            r2_square = r2_score(y_test, predicted)
+            return r2_square
+
+
 
         except Exception as e:
-            raise CustomException(e, sys)
-        
-if __name__ == "__main__":
-    import sys
-    from src.mlproject.components.data_transformation import DataTransformation
-    from src.mlproject.components.model_trainer import ModelTrainer
-
-    # Paths from DataIngestion (assuming you already ingested and transformed the data)
-    train_path = "artifacts/train.csv"
-    test_path = "artifacts/test.csv"
-
-    try:
-        # Step 1: Data Transformation
-        transformer = DataTransformation()
-        train_arr, test_arr = transformer.initiate_data_transformation(train_path, test_path)
-
-        # Step 2: Model Training
-        trainer = ModelTrainer()
-        model_score = trainer.initiate_model_training(train_arr, test_arr)
-        print(f"\n Model trained successfully. Best model score: {model_score}\n")
-
-    except Exception as e:
-        print(f"\n Something went wrong: {e}")
-        sys.exit(1)
+            raise CustomException(e,sys)
