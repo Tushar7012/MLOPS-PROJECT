@@ -5,8 +5,8 @@ pymongo
 certifi
 python-dotenv
 dill
-pickle
 seaborn
 catboost
 xgboost
--e .
+mlflow
+# -e .
