@@ -22,6 +22,7 @@ list_of_files= [
     f"src/{project_name}/utils.py",
     "app.py",
     "DockerFile",
+    "stream.py"
 
 ]
 
